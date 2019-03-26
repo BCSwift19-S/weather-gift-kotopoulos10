@@ -7,6 +7,7 @@
 //
 
 import UIKit
+import GooglePlaces
 
 class ListVC: UIViewController {
 
@@ -15,7 +16,7 @@ class ListVC: UIViewController {
     @IBOutlet weak var addBarButton: UIBarButtonItem!
     
     
-    var locationsArray = [String]()
+    var locationsArray = [WeatherLocation]()
     var currentPage = 0
     
     override func viewDidLoad() {
@@ -36,6 +37,16 @@ class ListVC: UIViewController {
         }
     }
     
+    func saveLocations(){
+        let encoder = JSONEncoder()
+        if let encoded = try? encoder.encode(locationsArray){
+            UserDefaults.standard.set(encoded, forKey: "locationsArray")
+        }else {
+            print("ERROR: Saving encoded data didn't work")
+        }
+    }
+    
+    
     @IBAction func editBarButtonPressed(_ sender: UIBarButtonItem) {
         if tableView.isEditing == true {
             tableView.setEditing(false, animated: true)
@@ -48,7 +59,12 @@ class ListVC: UIViewController {
         }
     }
     
-
+    @IBAction func addBarButtonPressed(_ sender: UIBarButtonItem) {
+        let autocompleteController = GMSAutocompleteViewController()
+        autocompleteController.delegate = self
+        present(autocompleteController, animated: true, completion: nil)
+    }
+    
 }
 
 extension ListVC: UITableViewDelegate, UITableViewDataSource{
@@ -58,7 +74,7 @@ extension ListVC: UITableViewDelegate, UITableViewDataSource{
     
     func tableView(_ tableView: UITableView, cellForRowAt indexPath: IndexPath) -> UITableViewCell {
         let cell = tableView.dequeueReusableCell(withIdentifier: "LocationCell", for: indexPath)
-        cell.textLabel?.text = locationsArray[indexPath.row]
+        cell.textLabel?.text = locationsArray[indexPath.row].name
         return cell
     }
     
@@ -68,6 +84,7 @@ extension ListVC: UITableViewDelegate, UITableViewDataSource{
         if editingStyle == .delete {
             locationsArray.remove(at: indexPath.row)
             tableView.deleteRows(at: [indexPath], with: .fade)
+            saveLocations()
         }
     }
     
@@ -75,6 +92,7 @@ extension ListVC: UITableViewDelegate, UITableViewDataSource{
         let itemToMove = locationsArray[sourceIndexPath.row]
         locationsArray.remove(at: sourceIndexPath.row)
         locationsArray.insert(itemToMove, at: destinationIndexPath.row)
+        saveLocations()
     }
     
     func tableView(_ tableView: UITableView, canMoveRowAt indexPath: IndexPath) -> Bool {
@@ -100,6 +118,45 @@ extension ListVC: UITableViewDelegate, UITableViewDataSource{
         else{
             return proposedDestinationIndexPath
         }
+    }
+    
+    func updateTable(place: GMSPlace){
+        let newIndexPath = IndexPath(row: locationsArray.count, section: 0)
+        let longitude = place.coordinate.longitude
+        let latitute = place.coordinate.latitude
+        let weatherLoc = WeatherLocation(name: place.name!, coordinates: "\(latitute),\(longitude)")
+        locationsArray.append(weatherLoc)
+        tableView.insertRows(at: [newIndexPath], with: .automatic)
+        saveLocations()
+    }
+    
+}
+
+extension ListVC: GMSAutocompleteViewControllerDelegate {
+    
+    // Handle the user's selection.
+    func viewController(_ viewController: GMSAutocompleteViewController, didAutocompleteWith place: GMSPlace) {
+        dismiss(animated: true, completion: nil)
+        updateTable(place: place)
+    }
+    
+    func viewController(_ viewController: GMSAutocompleteViewController, didFailAutocompleteWithError error: Error) {
+        // TODO: handle the error.
+        print("Error: ", error.localizedDescription)
+    }
+    
+    // User canceled the operation.
+    func wasCancelled(_ viewController: GMSAutocompleteViewController) {
+        dismiss(animated: true, completion: nil)
+    }
+    
+    // Turn the network activity indicator on and off again.
+    func didRequestAutocompletePredictions(_ viewController: GMSAutocompleteViewController) {
+        UIApplication.shared.isNetworkActivityIndicatorVisible = true
+    }
+    
+    func didUpdateAutocompletePredictions(_ viewController: GMSAutocompleteViewController) {
+        UIApplication.shared.isNetworkActivityIndicatorVisible = false
     }
     
 }
